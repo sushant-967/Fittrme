@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: fittrme-backend
+    env: go
+    plan: free
+    region: oregon
+    buildCommand: go build -o server .
+    startCommand: ./server
+    envVars:
+      - key: PORT
+        value: 8080
