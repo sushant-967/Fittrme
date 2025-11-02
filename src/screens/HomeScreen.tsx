@@ -1,4 +1,4 @@
-    import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
     import {
       View,
       Text,
@@ -12,13 +12,25 @@
       ScrollView,
     } from 'react-native';
 
+    // type WeightRecord = {
+    //   id?: number;
+    //   user_id?: number;
+    //   value_kg: number;
+    //   unit?: string;
+    //   measured_at?: string;
+    // };
     type WeightRecord = {
       id?: number;
-      user_id?: number;
-      value_kg: number;
-      unit?: string;
+      userId?: number;
+      currentWeight?: number;
+      targetWeight?: number;
+      height?: number;
       measured_at?: string;
+      // legacy/compat fields sometimes used in UI
+      value_kg?: number;
+      unit?: string;
     };
+
 
     export default function HomeScreen() {
       const [currentWeight, setCurrentWeight] = useState<string>('75'); // kg
@@ -39,25 +51,37 @@
       const heightNum = parseFloat(heightCm) || 0;
 
       // use port 5000 and provided endpoints
-    const API_BASE = "http://192.168.1.112:5000";
-      const USER_ID = 1; // change as needed / use auth later
+    const API_BASE = "https://fittrme.onrender.com";
+      const USER_ID = 101; // change as needed / use auth later
 
       // fetch recent weights from backend
       async function loadWeights() {
         try {
           setLoadingWeights(true);
-          const res = await fetch(`${API_BASE}/api/weight/${USER_ID}`);
+          const res = await fetch(`${API_BASE}/fittrme-api/weight/${USER_ID}`);
+
           if (!res.ok) {
             throw new Error(`server ${res.status}`);
           }
-          const data: WeightRecord[] = await res.json();
-          setWeights(Array.isArray(data) ? data : []);
-          // if we have a recent weight, update currentWeight to reflect it (optional)
-          if (Array.isArray(data) && data.length > 0) {
-            const latest = data[0];
-            if (latest && typeof latest.value_kg === 'number') {
-              setCurrentWeight(String(latest.value_kg));
+
+          const data = await res.json();
+
+          // backend may return an object (single record) or array — handle both
+          if (Array.isArray(data)) {
+            setWeights(data);
+            const first = data[0];
+            if (first) {
+              setCurrentWeight(String(first.currentWeight ?? first.value_kg ?? currentWeight));
+              if (first.targetWeight != null) setTargetWeight(String(first.targetWeight));
+              if (first.height != null) setHeightCm(String(first.height));
             }
+          } else if (data && typeof data === 'object') {
+            setWeights([data]);
+            setCurrentWeight(String(data.currentWeight ?? data.value_kg ?? currentWeight));
+            if (data.targetWeight != null) setTargetWeight(String(data.targetWeight));
+            if (data.height != null) setHeightCm(String(data.height));
+          } else {
+            setWeights([]);
           }
         } catch (e) {
           console.warn('loadWeights error', e);
@@ -81,15 +105,15 @@
         }
 
         const payload: WeightRecord = {
-          user_id: USER_ID,
-          value_kg: value,
-          unit: 'kg',
-          measured_at: new Date().toISOString(),
+          userId: USER_ID,
+          currentWeight: value,
+          targetWeight: parseFloat(targetWeight) || value,
+          height: parseFloat(heightCm) || 0,
         };
 
         try {
           setSaving(true);
-          const res = await fetch(`${API_BASE}/api/weight/`, {
+          const res = await fetch(`${API_BASE}/fittrme-api/weight`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -98,10 +122,14 @@
             const text = await res.text().catch(() => '');
             throw new Error(text || `status ${res.status}`);
           }
-          const created: WeightRecord = await res.json();
-          // prepend to local list and keep UI in sync
-          setWeights((s) => [created || payload, ...s]);
-          setSelectedId(created?.id);
+
+          const body = await res.json();
+          // handlers/weight.go returns {"message": "...", "user": payload} — support both shapes
+          const saved = body.user ?? body;
+
+          setWeights((s) => [saved || payload, ...s]);
+          setSelectedId(saved?.id ?? saved?.userId);
+          if (saved?.currentWeight != null) setCurrentWeight(String(saved.currentWeight));
           Alert.alert('Saved', 'Weight saved successfully.');
         } catch (err) {
           console.warn('saveWeight error', err);
@@ -278,7 +306,7 @@
                     onPress={saveWeight}
                     disabled={saving}
                   >
-                    <Text style={styles.actionBtnText}>{saving ? 'Saving...' : 'Save weight'}</Text>
+                    <Text style={styles.actionBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -291,7 +319,7 @@
 
                 {latestRecord && (
                   <Text style={{ color: '#9FB3C8', marginTop: 8 }}>
-                    Last saved: <Text style={{ color: '#7EE7C8', fontWeight: '800' }}>{latestRecord.value_kg} kg</Text>{' '}
+                    Last saved: <Text style={{ color: '#7EE7C8', fontWeight: '800' }}>{latestRecord.currentWeight} kg</Text>{' '}
                     • {formatDate(latestRecord.measured_at)}
                   </Text>
                 )}
