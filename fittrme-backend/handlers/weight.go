@@ -38,7 +38,7 @@ func GetWeight(c *gin.Context) {
 
 	// Query using your REAL column: dm_lstupddt
 	row := database.DB.QueryRow(`
-        SELECT id, user_id, current_weight, target_weight, height,
+        SELECT user_id, current_weight, target_weight, height,
                COALESCE(dm_lstupddt, NOW())
         FROM weights
         WHERE user_id = $1
@@ -46,14 +46,13 @@ func GetWeight(c *gin.Context) {
         LIMIT 1
     `, userId)
 
-	var id sql.NullInt64
 	var uid sql.NullInt64
 	var current sql.NullFloat64
 	var target sql.NullFloat64
 	var height sql.NullFloat64
 	var measuredAt sql.NullString
 
-	err := row.Scan(&id, &uid, &current, &target, &height, &measuredAt)
+	err := row.Scan(&uid, &current, &target, &height, &measuredAt)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"message": "No weight record found for this user"})
 		return
@@ -75,7 +74,6 @@ func GetWeight(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"userId": userId,
 		"weight": gin.H{
-			"id":            id.Int64,
 			"userId":        weight.UserID,
 			"currentWeight": weight.CurrentWeight,
 			"targetWeight":  weight.TargetWeight,
