@@ -1,7 +1,45 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useContext } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { AuthContext } from '../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 export default function ProfileScreen() {
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
+  const navigation = useNavigation<any>();
+
+  async function handleLogout() {
+    Alert.alert('Logout', 'Sign out from this device?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // remove tokens and user from storage
+            await AsyncStorage.removeItem('fittrme_token');
+            await AsyncStorage.removeItem('fittrme_user');
+
+            // clear auth context if available
+            if (auth && typeof auth.signOut === 'function') {
+              await auth.signOut();
+            }
+
+            // reset navigation to the auth/login flow so a new token must be created
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Auth', params: { screen: 'Login' } }],
+            });
+          } catch (e) {
+            // fallback: navigate to Login
+            navigation.replace('Login');
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -50,6 +88,24 @@ export default function ProfileScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Achievements</Text>
         <Text style={styles.cardText}>You earned the 10-workout badge 🎖️</Text>
+      </View>
+
+      <View style={styles.profileInfo}>
+        {user ? (
+          <>
+            <Text style={styles.label}>Username</Text>
+            <Text style={styles.value}>{user.username}</Text>
+
+            <Text style={styles.label}>Email</Text>
+            <Text style={styles.value}>{user.email}</Text>
+
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <Text style={styles.value}>No user data</Text>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -125,4 +181,10 @@ const styles = StyleSheet.create({
   },
   cardTitle: { color: '#E6EEF3', fontWeight: '800', marginBottom: 6 },
   cardText: { color: '#9FB3C8' },
+
+  profileInfo: { marginTop: 24 },
+  label: { color: '#9FB3C8', marginTop: 10 },
+  value: { color: '#E6EEF3', fontWeight: '700', marginTop: 4 },
+  logoutBtn: { marginTop: 20, backgroundColor: '#EF4444', padding: 12, borderRadius: 10, alignItems: 'center' },
+  logoutText: { color: '#fff', fontWeight: '800' },
 });

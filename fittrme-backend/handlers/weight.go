@@ -1,88 +1,123 @@
 package handlers
 
 import (
+	"database/sql"
 	"fittrme-backend/database"
 	"fittrme-backend/models"
 	"net/http"
-	"database/sql" 
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 )
 
-func GetWeight(c *gin.Context) {
-	// Step 1: Extract userId from context (added by AuthRequired middleware)
-	userId, exists := c.Get("userId")
+func extractUserID(c *gin.Context) (int, bool) {
+	uidI, exists := c.Get("userId")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return 0, false
+	}
+	switch v := uidI.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case string:
+		if n, err := strconv.Atoi(v); err == nil {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func GetWeight(c *gin.Context) {
+	// get robust user id
+	userId, ok := extractUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - user id missing"})
 		return
 	}
 
-	// Step 2: Query for this user's weight record (no ID or recorded_at)
+	// Query latest weight record for this user
 	row := database.DB.QueryRow(`
-		SELECT user_id, current_weight, target_weight, height
-		FROM weights
-		WHERE user_id = $1
-	`, userId.(int))
+        SELECT id, user_id, current_weight, target_weight, height, COALESCE(measured_at, NOW())
+        FROM weights
+        WHERE user_id = $1
+        ORDER BY measured_at DESC
+        LIMIT 1
+    `, userId)
 
-	// Step 3: Scan into your struct
-	var weight models.Weight
-	err := row.Scan(&weight.UserID, &weight.CurrentWeight, &weight.TargetWeight, &weight.Height)
+	var id sql.NullInt64
+	var uid sql.NullInt64
+	var current sql.NullFloat64
+	var target sql.NullFloat64
+	var height sql.NullFloat64
+	var measuredAt sql.NullString
 
-	// Step 4: Handle possible errors
+	err := row.Scan(&id, &uid, &current, &target, &height, &measuredAt)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"message": "No weight record found for this user"})
 		return
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "detail": err.Error()})
 		return
 	}
 
-	// Step 5: Return the record
+	weight := models.Weight{
+		UserID:        int(uid.Int64),
+		CurrentWeight: current.Float64,
+		TargetWeight:  target.Float64,
+		Height:        height.Float64,
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"userId": userId,
-		"weight": weight,
+		"weight": gin.H{
+			"id":            id.Int64,
+			"userId":        weight.UserID,
+			"currentWeight": weight.CurrentWeight,
+			"targetWeight":  weight.TargetWeight,
+			"height":        weight.Height,
+			"measured_at":   measuredAt.String,
+		},
 	})
 }
 
 func SaveWeight(c *gin.Context) {
-	// Step 1: Extract userId from JWT context
-	userId, exists := c.Get("userId")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	userId, ok := extractUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - user id missing"})
 		return
 	}
 
-	// Step 2: Parse input JSON
 	var payload models.Weight
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Step 3: Basic validation
 	if payload.CurrentWeight <= 0 || payload.TargetWeight <= 0 || payload.Height <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input values"})
 		return
 	}
 
-	// Step 4: Insert or update record
 	_, err := database.DB.Exec(`
-		INSERT INTO weights (user_id, current_weight, target_weight, height)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id)
-		DO UPDATE SET current_weight = EXCLUDED.current_weight,
-					  target_weight = EXCLUDED.target_weight,
-					  height = EXCLUDED.height
-	`, userId.(int), payload.CurrentWeight, payload.TargetWeight, payload.Height)
+        INSERT INTO weights (user_id, current_weight, target_weight, height)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (user_id)
+        DO UPDATE SET current_weight = EXCLUDED.current_weight,
+                      target_weight = EXCLUDED.target_weight,
+                      height = EXCLUDED.height
+    `, userId, payload.CurrentWeight, payload.TargetWeight, payload.Height)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save weight data"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save weight data", "detail": err.Error()})
 		return
 	}
 
-	// Step 5: Return success response
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Weight data saved successfully",
-		"data": gin.H{
+		"weight": gin.H{
 			"userId":        userId,
 			"currentWeight": payload.CurrentWeight,
 			"targetWeight":  payload.TargetWeight,
