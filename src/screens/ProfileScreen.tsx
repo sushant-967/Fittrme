@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,12 @@ export default function ProfileScreen() {
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const navigation = useNavigation<any>();
+
+  // Generate initials from username (first letter, capitalized)
+  const getInitials = (name?: string): string => {
+    if (!name) return 'U';
+    return name.charAt(0).toUpperCase();
+  };
 
   async function handleLogout() {
     Alert.alert('Logout', 'Sign out from this device?', [
@@ -40,151 +46,119 @@ export default function ProfileScreen() {
     ]);
   }
 
+  const initials = getInitials(user?.username);
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarInitial}>U</Text>
+    <View style={styles.container}>
+      {/* Header with Avatar and Username */}
+      <View style={styles.headerSection}>
+        <View style={styles.avatarContainer}>
+          <Text style={styles.avatar}>{initials}</Text>
+        </View>
+        <Text style={styles.username}>{user?.username ?? 'Guest'}</Text>
+      </View>
+
+      {/* Profile Details Card */}
+      <View style={styles.profileCard}>
+        <View style={styles.detailRow}>
+          <Text style={styles.label}>Username</Text>
+          <Text style={styles.value}>{user?.username ?? 'N/A'}</Text>
         </View>
 
-        <View style={styles.info}>
-          <Text style={styles.name}>User Name</Text>
-          <Text style={styles.sub}>Pro Member</Text>
+        <View style={styles.divider} />
+
+        <View style={styles.detailRow}>
+          <Text style={styles.label}>Email</Text>
+          <Text style={styles.value}>{user?.email ?? 'N/A'}</Text>
         </View>
 
-        <View style={styles.coins}>
-          <Text style={styles.coinsLabel}>FittrCoins</Text>
-          <Text style={styles.coinsValue}>1,240</Text>
+        <View style={styles.divider} />
+
+        <View style={styles.detailRow}>
+          <Text style={styles.label}>User ID</Text>
+          <Text style={styles.value}>{user?.userId ?? 'N/A'}</Text>
         </View>
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statTitle}>Workouts</Text>
-          <Text style={styles.statNum}>24</Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statTitle}>Streak</Text>
-          <Text style={styles.statNum}>7d</Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statTitle}>Progress</Text>
-          <Text style={styles.statNum}>64%</Text>
-        </View>
-      </View>
-
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.primaryBtn}>
-          <Text style={styles.primaryText}>Edit Profile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.secondaryBtn}>
-          <Text style={styles.secondaryText}>Settings</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Achievements</Text>
-        <Text style={styles.cardText}>You earned the 10-workout badge 🎖️</Text>
-      </View>
-
-      <View style={styles.profileInfo}>
-        {user ? (
-          <>
-            <Text style={styles.label}>Username</Text>
-            <Text style={styles.value}>{user.username}</Text>
-
-            <Text style={styles.label}>Email</Text>
-            <Text style={styles.value}>{user.email}</Text>
-
-            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-              <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <Text style={styles.value}>No user data</Text>
-        )}
-      </View>
-    </SafeAreaView>
+      {/* Logout Button */}
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#071022', padding: 16 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    justifyContent: 'space-between',
+  container: {
+    padding: 18,
+    flex: 1,
+    backgroundColor: '#0B1220',
   },
-  avatarPlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    backgroundColor: '#081426',
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 12,
+  },
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#7C3AED',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#122033',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#7EE7C8',
   },
-  avatarInitial: { color: '#E6EEF3', fontSize: 28, fontWeight: '800' },
-
-  info: { flex: 1, marginLeft: 12 },
-  name: { color: '#E6EEF3', fontSize: 18, fontWeight: '800' },
-  sub: { color: '#98A2B3', marginTop: 4 },
-
-  coins: { alignItems: 'flex-end' },
-  coinsLabel: { color: '#9FB3C8', fontSize: 12 },
-  coinsValue: { color: '#7EE7C8', fontWeight: '800', fontSize: 18 },
-
-  statsRow: { flexDirection: 'row', marginTop: 8, gap: 10, marginBottom: 16 },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#081426',
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#122033',
+  avatar: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '800',
   },
-  statTitle: { color: '#9FB3C8', fontSize: 12 },
-  statNum: { color: '#E6EEF3', fontSize: 18, fontWeight: '800', marginTop: 6 },
-
-  actions: { flexDirection: 'row', marginBottom: 16, gap: 10 },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: '#06B6D4',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
+  username: {
+    color: '#E6EEF3',
+    fontSize: 22,
+    fontWeight: '800',
   },
-  primaryText: { color: '#071122', fontWeight: '800' },
-  secondaryBtn: {
-    width: 120,
-    backgroundColor: '#071428',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#122033',
-  },
-  secondaryText: { color: '#9FB3C8', fontWeight: '700' },
-
-  card: {
+  profileCard: {
     backgroundColor: '#071022',
-    padding: 12,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#122033',
+    marginBottom: 20,
   },
-  cardTitle: { color: '#E6EEF3', fontWeight: '800', marginBottom: 6 },
-  cardText: { color: '#9FB3C8' },
-
-  profileInfo: { marginTop: 24 },
-  label: { color: '#9FB3C8', marginTop: 10 },
-  value: { color: '#E6EEF3', fontWeight: '700', marginTop: 4 },
-  logoutBtn: { marginTop: 20, backgroundColor: '#EF4444', padding: 12, borderRadius: 10, alignItems: 'center' },
-  logoutText: { color: '#fff', fontWeight: '800' },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  label: {
+    color: '#9FB3C8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  value: {
+    color: '#E6EEF3',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#122033',
+  },
+  logoutBtn: {
+    marginTop: 'auto',
+    marginBottom: 20,
+    backgroundColor: '#EF4444',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  logoutText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
+  },
 });
